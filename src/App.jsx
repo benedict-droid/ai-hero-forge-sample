@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { characters } from './characters';
 
-const DEFAULT_API_KEY = 'AIzaSyByOlg3GIye_shbS3unJIrl-ZJqswAYGEw';
-const DEFAULT_PROMPT = "Transform this person into Leonardo da Vinci style. \nBlend the user's face with:\nTraits: thoughtful, intellectual, artistic visionary\nVisual Style: Renaissance painting style, warm tones\nKeep facial identity. Highly detailed.";
+
+const DEFAULT_API_KEY = 'enter api key here';
 
 function App() {
   const [apiKey, setApiKey] = useState(DEFAULT_API_KEY);
@@ -13,7 +13,11 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
   const fileInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
 
   // Initialize with the first character
   useEffect(() => {
@@ -124,6 +128,61 @@ FAILURE CONDITIONS:
         });
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' }
+      });
+      setCameraStream(stream);
+      setShowCamera(true);
+      // Wait for state to update and ref to be attached
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      setError("Could not access camera. Please check permissions.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw the video frame to the canvas
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert to data URL
+      const dataUrl = canvas.toDataURL('image/png');
+      setSelectedImage(dataUrl);
+
+      // Extract base64 for API
+      const base64String = dataUrl.split(',')[1];
+      setBase64Image({
+        mime_type: 'image/png',
+        data: base64String
+      });
+
+      stopCamera();
     }
   };
 
@@ -271,7 +330,7 @@ FAILURE CONDITIONS:
 
   return (
     <div className="app-container">
-      <h1>Gemini <span style={{ color: 'var(--accent-primary)' }}>Vision</span> Morph</h1>
+      <h1>Gemini <span style={{ color: 'var(--accent-primary)' }}>Vision</span> Test Playground</h1>
       <p className="subtitle">Transform your images with the power of multimodal AI.</p>
 
       <div className="app-grid">
@@ -325,31 +384,57 @@ FAILURE CONDITIONS:
 
             <div className="input-group">
               <label>Source Image</label>
-              <div
-                className="file-upload-zone"
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImageUpload}
-                  accept="image/*"
-                  hidden
-                />
+              {showCamera ? (
+                <div className="camera-container" style={{ position: 'relative', marginBottom: '1rem' }}>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    style={{ width: '100%', borderRadius: '8px', background: '#000' }}
+                  />
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px', justifyContent: 'center' }}>
+                    <button onClick={capturePhoto} className="btn" style={{ background: 'var(--accent-primary)', flex: 1 }}>Capture</button>
+                    <button onClick={stopCamera} className="btn" style={{ background: '#ef4444', flex: 1 }}>Cancel</button>
+                  </div>
+                  <canvas ref={canvasRef} style={{ display: 'none' }} />
+                </div>
+              ) : (
+                <div
+                  className="file-upload-zone"
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageUpload}
+                    accept="image/*"
+                    hidden
+                  />
 
-                {selectedImage ? (
-                  <div className="image-preview">
-                    <img src={selectedImage} alt="Preview" />
-                  </div>
-                ) : (
-                  <div className="upload-placeholder">
-                    <p><strong>Click to upload</strong> or drag and drop</p>
-                    <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>PNG, JPG, BMP supported</p>
-                  </div>
-                )}
-              </div>
+                  {selectedImage ? (
+                    <div className="image-preview">
+                      <img src={selectedImage} alt="Preview" />
+                    </div>
+                  ) : (
+                    <div className="upload-placeholder">
+                      <p><strong>Click to upload</strong> or drag and drop</p>
+                      <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>PNG, JPG, BMP supported</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!showCamera && (
+                <button
+                  className="btn secondary-btn"
+                  onClick={startCamera}
+                  style={{ width: '100%', marginTop: '1rem', background: 'rgba(255, 255, 255, 0.1)' }}
+                >
+                  📸 Use Camera
+                </button>
+              )}
             </div>
 
             <button
@@ -383,7 +468,7 @@ FAILURE CONDITIONS:
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 }
 
